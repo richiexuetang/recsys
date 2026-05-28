@@ -184,6 +184,7 @@ def export_onnx(model: DIN, path: str, sidecar_path: str, batch=4):
         wrap, tuple(dummy), path,
         input_names=names, output_names=["pctr"],
         dynamic_axes=dyn, opset_version=14,
+        dynamo=False,          # use the legacy TorchScript exporter
     )
     with open(sidecar_path, "w") as f:
         json.dump({"input_order": names, "output": "pctr"}, f, indent=2)

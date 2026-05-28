@@ -86,7 +86,7 @@ python prep/make_catalog.py --raw ./raw/train.parquet --out ./build --n-users 40
 # (d) serve — Go inference server (see ONNX Runtime note below first)
 cd server
 go run . --build ../build --onnx ../build/din.onnx \
-         --ort /path/to/libonnxruntime.so --catalog ../build/catalog.json
+         --ort /runtime/libonnxruntime.dylib --catalog ../build/catalog.json
 
 # (e) web — React console
 cd web && npm install && npm run dev   # http://localhost:5173, proxies API to :8080

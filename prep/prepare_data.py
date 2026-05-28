@@ -15,7 +15,7 @@ If the encoding contract lived in two places it would drift -- so it lives here 
 
 Get the dataset first (one of):
     pip install huggingface_hub
-    huggingface-cli download reczoo/TaobaoAd_x1 --repo-type dataset --local-dir ./raw
+    hf download reczoo/TaobaoAd_x1 --repo-type dataset --local-dir ./raw
         # then point --raw at the downloaded parquet, e.g. ./raw/<file>.parquet
 
 Usage:

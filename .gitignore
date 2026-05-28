@@ -1,1 +1,61 @@
+# ── Project artifacts (regenerated, never committed) ────────────────────────
+# The Python→Go seam: produced by prepare_data.py / train.py / make_catalog.py
+build/
+# Downloaded HuggingFace dataset
+raw/
+# but keep a tiny committed sample so the repo is runnable without a 25M download
+!build/catalog.sample.json
+
+# Loose model artifacts if any land outside build/
+*.onnx
+*.onnx.json
+*.pt
+*.npz
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Go (server/) ────────────────────────────────────────────────────────────
+# Compiled binaries — adjust names if you `go build -o` something specific
+server/server
+server/recsys-server
+*.exe
+*.test
+*.out
+# ONNX Runtime shared lib is downloaded per-platform, not vendored
+*.so
+*.dylib
+onnxruntime*.dll
+libonnxruntime*
+
+# ── Node / React (web/) ─────────────────────────────────────────────────────
+node_modules/
+web/dist/
+web/build/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Env / secrets ───────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Editor / OS ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
 .DS_Store
+Thumbs.db

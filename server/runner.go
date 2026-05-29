@@ -7,17 +7,18 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-// Runner owns the ONNX session and turns batches of Encoded into pCTR scores.
+// Runner owns the ONNX session. The exported graph has multiple outputs:
+//   pctr            [N]      click probability
+//   attn__<col>     [N, L]   attention weights per attended sequence
+// Infer runs the graph and returns every output as a flat slice keyed by name.
 type Runner struct {
-	enc     *Encoder
-	session *ort.DynamicAdvancedSession
-	inNames []string
-	outName string
-	seqLen  int64
+	enc      *Encoder
+	session  *ort.DynamicAdvancedSession
+	inNames  []string
+	outNames []string
+	seqLen   int64
 }
 
-// NewRunner initializes the ORT environment and opens a session on din.onnx.
-// onnxPath is the model; the shared library path is the platform's ORT .so/.dylib/.dll.
 func NewRunner(enc *Encoder, onnxPath, ortLibPath string) (*Runner, error) {
 	if ortLibPath != "" {
 		ort.SetSharedLibraryPath(ortLibPath)
@@ -25,19 +26,18 @@ func NewRunner(enc *Encoder, onnxPath, ortLibPath string) (*Runner, error) {
 	if err := ort.InitializeEnvironment(); err != nil {
 		return nil, fmt.Errorf("ort init: %w", err)
 	}
-
 	in := enc.IO.InputOrder
-	out := enc.IO.Output
-	session, err := ort.NewDynamicAdvancedSession(onnxPath, in, []string{out}, nil)
+	out := enc.IO.Outputs
+	if len(out) == 0 {
+		return nil, fmt.Errorf("sidecar has no outputs; re-export the model with the updated din.py")
+	}
+	session, err := ort.NewDynamicAdvancedSession(onnxPath, in, out, nil)
 	if err != nil {
 		return nil, fmt.Errorf("open session: %w", err)
 	}
 	return &Runner{
-		enc:     enc,
-		session: session,
-		inNames: in,
-		outName: out,
-		seqLen:  int64(enc.Spec.MaxSeqLen),
+		enc: enc, session: session,
+		inNames: in, outNames: out, seqLen: int64(enc.Spec.MaxSeqLen),
 	}, nil
 }
 
@@ -48,15 +48,15 @@ func (r *Runner) Close() {
 	ort.DestroyEnvironment()
 }
 
-// Score runs a batch and returns one pCTR per request, in input order.
-func (r *Runner) Score(batch []*Encoded) ([]float32, error) {
+// Infer runs one batch and returns each output flattened, keyed by output name.
+// "pctr" has length N; "attn__<col>" has length N*L (row-major).
+func (r *Runner) Infer(batch []*Encoded) (map[string][]float32, error) {
 	n := int64(len(batch))
 	if n == 0 {
-		return nil, nil
+		return map[string][]float32{}, nil
 	}
+	denseDim := int64(len(r.enc.Spec.Dense))
 
-	// Build one ORT tensor per declared input name. The name prefix tells us
-	// its shape: sparse__/seqlen__ are [N], seq__ is [N, L], dense is [N, D].
 	inputs := make([]ort.Value, len(r.inNames))
 	defer func() {
 		for _, v := range inputs {
@@ -65,8 +65,6 @@ func (r *Runner) Score(batch []*Encoded) ([]float32, error) {
 			}
 		}
 	}()
-
-	denseDim := int64(len(r.enc.Spec.Dense))
 
 	for i, name := range r.inNames {
 		switch {
@@ -80,7 +78,6 @@ func (r *Runner) Score(batch []*Encoded) ([]float32, error) {
 				return nil, err
 			}
 			inputs[i] = t
-
 		case strings.HasPrefix(name, "seq__"):
 			data := make([]int64, n*r.seqLen)
 			for b, e := range batch {
@@ -91,7 +88,6 @@ func (r *Runner) Score(batch []*Encoded) ([]float32, error) {
 				return nil, err
 			}
 			inputs[i] = t
-
 		case strings.HasPrefix(name, "seqlen__"):
 			data := make([]int64, n)
 			for b, e := range batch {
@@ -102,7 +98,6 @@ func (r *Runner) Score(batch []*Encoded) ([]float32, error) {
 				return nil, err
 			}
 			inputs[i] = t
-
 		default: // sparse__<col>
 			data := make([]int64, n)
 			for b, e := range batch {
@@ -116,17 +111,50 @@ func (r *Runner) Score(batch []*Encoded) ([]float32, error) {
 		}
 	}
 
-	out, err := ort.NewEmptyTensor[float32](ort.NewShape(n))
-	if err != nil {
-		return nil, err
+	// allocate one output tensor per declared output name
+	outTensors := make([]*ort.Tensor[float32], len(r.outNames))
+	outVals := make([]ort.Value, len(r.outNames))
+	defer func() {
+		for _, t := range outTensors {
+			if t != nil {
+				t.Destroy()
+			}
+		}
+	}()
+	for i, name := range r.outNames {
+		var shape ort.Shape
+		if strings.HasPrefix(name, "attn__") {
+			shape = ort.NewShape(n, r.seqLen)
+		} else {
+			shape = ort.NewShape(n)
+		}
+		t, err := ort.NewEmptyTensor[float32](shape)
+		if err != nil {
+			return nil, err
+		}
+		outTensors[i] = t
+		outVals[i] = t
 	}
-	defer out.Destroy()
 
-	if err := r.session.Run(inputs, []ort.Value{out}); err != nil {
+	if err := r.session.Run(inputs, outVals); err != nil {
 		return nil, fmt.Errorf("inference: %w", err)
 	}
 
-	scores := make([]float32, n)
-	copy(scores, out.GetData())
-	return scores, nil
+	res := make(map[string][]float32, len(r.outNames))
+	for i, name := range r.outNames {
+		src := outTensors[i].GetData()
+		cp := make([]float32, len(src))
+		copy(cp, src)
+		res[name] = cp
+	}
+	return res, nil
+}
+
+// Scores is the fast path for ranking: just the pCTR vector.
+func (r *Runner) Scores(batch []*Encoded) ([]float32, error) {
+	out, err := r.Infer(batch)
+	if err != nil {
+		return nil, err
+	}
+	return out["pctr"], nil
 }

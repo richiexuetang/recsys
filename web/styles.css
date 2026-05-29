@@ -49,7 +49,7 @@ body::before {
     position: relative;
 }
 
-/* ── topbar ── */
+/* topbar */
 .topbar {
     display: flex;
     justify-content: space-between;
@@ -108,7 +108,7 @@ body::before {
     color: var(--dimmer);
 }
 
-/* ── layout ── */
+/* layout */
 .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -128,7 +128,7 @@ body::before {
     }
 }
 
-/* ── panels ── */
+/* panels */
 .panel {
     background: var(--panel);
     border: 1px solid var(--line);
@@ -159,7 +159,7 @@ body::before {
     color: var(--dim);
 }
 
-/* ── controls ── */
+/* controls */
 .select,
 .btn,
 input[type="number"] {
@@ -211,7 +211,7 @@ input[type="number"] {
     font-size: 12px;
 }
 
-/* ── user profile ── */
+/* user profile */
 .profile-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -238,7 +238,7 @@ input[type="number"] {
     font-weight: 500;
 }
 
-/* ── behavior history ── */
+/* behavior history */
 .history {
     margin-top: 16px;
     padding-top: 14px;
@@ -289,7 +289,7 @@ input[type="number"] {
     border-style: dashed;
 }
 
-/* ── explorer gauge ── */
+/* explorer gauge */
 .ad-meta {
     font-family: var(--mono);
     font-size: 11px;
@@ -334,7 +334,7 @@ input[type="number"] {
     color: var(--dim);
 }
 
-/* ── ranked feed ── */
+/* ranked feed */
 .panel-feed {
     min-height: 420px;
 }
@@ -434,7 +434,7 @@ input[type="number"] {
     text-align: right;
 }
 
-/* ── states ── */
+/* states */
 .empty,
 .loading {
     font-family: var(--mono);
@@ -467,4 +467,87 @@ input[type="number"] {
     font-size: 11px;
     color: var(--dimmer);
     text-align: center;
+}
+
+/* attention view */
+.attn {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line);
+}
+
+.attn-head {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.attn-block {
+    margin-bottom: 14px;
+}
+
+.attn-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--txt);
+    margin-bottom: 7px;
+}
+
+.attn-tgt {
+    color: var(--dim);
+}
+
+.attn-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.attn-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+}
+
+.attn-tok {
+    min-width: 58px;
+    color: var(--dim);
+    text-align: right;
+}
+
+.attn-hit .attn-tok {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.attn-bar {
+    flex: 1;
+    height: 9px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+}
+
+.attn-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.attn-hit .attn-fill {
+    background: var(--accent);
+}
+
+.attn-pct {
+    min-width: 42px;
+    text-align: right;
+    color: var(--txt);
 }

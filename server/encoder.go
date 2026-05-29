@@ -31,10 +31,11 @@ type FeatureSpec struct {
 	Sequences  []SequenceFeature `json:"sequence_features"`
 }
 
-// Sidecar din.onnx.json: the positional order Go must feed tensors in.
+// Sidecar din.onnx.json: the positional order Go must feed tensors in, and the
+// ordered output names (pctr first, then attn__<col> per attended sequence).
 type ModelIO struct {
 	InputOrder []string `json:"input_order"`
-	Output     string   `json:"output"`
+	Outputs    []string `json:"outputs"`
 }
 
 // --- Encoder -----------------------------------------------------------------
@@ -139,6 +140,16 @@ func (e *Encoder) Encode(r *Request) *Encoded {
 		out.SeqLens["seqlen__"+s.Column] = int64(len(hist))
 	}
 	return out
+}
+
+// CappedHistory returns the same most-recent-L slice Encode pads from, so the
+// caller can zip attention weights[i] to the historical token at position i.
+func (e *Encoder) CappedHistory(tokens []string) []string {
+	L := e.Spec.MaxSeqLen
+	if len(tokens) > L {
+		return tokens[len(tokens)-L:]
+	}
+	return tokens
 }
 
 func readJSON(path string, v any) error {

@@ -22,9 +22,9 @@ type User struct {
 }
 
 type Ad struct {
-	ID     string             `json:"id"`
-	Title  string             `json:"title"`  // human label for the UI
-	Sparse map[string]string  `json:"sparse"` // ad-side fields incl cate_id, brand
+	ID     string            `json:"id"`
+	Title  string            `json:"title"`  // human label for the UI
+	Sparse map[string]string `json:"sparse"` // ad-side fields incl cate_id, brand
 	Dense  map[string]float32 `json:"dense"`  // price
 }
 
@@ -60,6 +60,12 @@ type scoreReq struct {
 	AdID   string `json:"ad_id"`
 }
 
+// attnWeight pairs a historical token with the attention the model placed on it.
+type attnWeight struct {
+	Token  string  `json:"token"`
+	Weight float32 `json:"weight"`
+}
+
 func (s *Server) handleScore(w http.ResponseWriter, r *http.Request) {
 	var req scoreReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -77,12 +83,41 @@ func (s *Server) handleScore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	enc := s.enc.Encode(s.buildRequest(u, a))
-	scores, err := s.run.Score([]*Encoded{enc})
+	out, err := s.run.Infer([]*Encoded{enc})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	writeJSON(w, map[string]any{"user_id": req.UserID, "ad_id": req.AdID, "pctr": scores[0]})
+
+	// Align each attended sequence's weights to the user's actual history tokens.
+	// weights[i] corresponds to the i-th token of the capped (most-recent-L) history.
+	L := s.enc.Spec.MaxSeqLen
+	attention := map[string][]attnWeight{}
+	for _, sf := range s.enc.Spec.Sequences {
+		if sf.TargetColumn == "" {
+			continue // mean-pooled sequence has no attention output
+		}
+		weights, ok := out["attn__"+sf.Column]
+		if !ok || len(weights) < L {
+			continue
+		}
+		hist := s.enc.CappedHistory(u.Seqs[sf.Column])
+		row := make([]attnWeight, 0, len(hist))
+		for i, tok := range hist {
+			if i >= L {
+				break
+			}
+			row = append(row, attnWeight{Token: tok, Weight: weights[i]})
+		}
+		attention[sf.Column] = row
+	}
+
+	writeJSON(w, map[string]any{
+		"user_id":   req.UserID,
+		"ad_id":     req.AdID,
+		"pctr":      out["pctr"][0],
+		"attention": attention,
+	})
 }
 
 type rankReq struct {
@@ -125,7 +160,7 @@ func (s *Server) handleRank(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	scores, err := s.run.Score(batch)
+	scores, err := s.run.Scores(batch)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -174,6 +209,7 @@ func main() {
 	ortLib := flag.String("ort", "", "path to onnxruntime shared lib (.so/.dylib/.dll)")
 	catalogPath := flag.String("catalog", "./build/catalog.json", "sample users/ads")
 	addr := flag.String("addr", ":8080", "listen address")
+	bench := flag.Bool("bench", false, "run the inference benchmark and exit (no server)")
 	flag.Parse()
 
 	enc, err := LoadEncoder(*buildDir)
@@ -197,6 +233,11 @@ func main() {
 	}
 	for i := range cat.Ads {
 		srv.ad[cat.Ads[i].ID] = &cat.Ads[i]
+	}
+
+	if *bench {
+		runBench(srv)
+		return
 	}
 
 	mux := http.NewServeMux()

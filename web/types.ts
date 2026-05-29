@@ -22,10 +22,17 @@ export interface Catalog {
   ads: Ad[];
 }
 
+export interface AttnWeight {
+  token: string;
+  weight: number;
+}
+
 export interface ScoreResult {
   user_id: string;
   ad_id: string;
   pctr: number;
+  // per attended sequence (cate_his, brand_his): weight on each historical token
+  attention?: Record<string, AttnWeight[]>;
 }
 
 export interface RankedAd {

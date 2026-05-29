@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { score } from "../api";
 import type { Ad, ScoreResult } from "../types";
+import AttentionView from "./AttentionView";
 import React from "react";
 
 function Gauge({ value }: { value: number }) {
@@ -77,6 +78,13 @@ export default function ScoreExplorer({ userId, ads }: ScoreExplorerProps) {
 
       {err && <div className="err">{err}</div>}
       {result && !err && <Gauge value={result.pctr} />}
+      {result && !err && result.attention && (
+        <AttentionView
+          attention={result.attention}
+          candidateCate={selAd?.sparse.cate_id}
+          candidateBrand={selAd?.sparse.brand}
+        />
+      )}
     </div>
   );
 }
